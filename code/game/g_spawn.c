@@ -870,6 +870,26 @@ void G_SpawnGEntityFromSpawnVars( void ) {
 	}
 }
 
+void G_SpawnExtraGEntityFromSpawnVars( void ) {
+	int i;
+	gentity_t   *ent;
+
+	// get the next free entity
+	ent = G_Spawn();
+
+	for ( i = 0 ; i < level.numSpawnVars ; i++ ) {
+		G_ParseField( level.spawnVars[i][0], level.spawnVars[i][1], ent );
+
+		VectorCopy( ent->s.origin, ent->s.pos.trBase );
+		VectorCopy( ent->s.origin, ent->r.currentOrigin );
+
+	}
+	// if we didn't get a classname, don't bother spawning anything
+	if ( !G_CallSpawn( ent ) ) {
+		G_FreeEntity( ent );
+	}
+}
+
 
 
 /*
@@ -892,6 +912,151 @@ char *G_AddSpawnVarToken( const char *string ) {
 	level.numSpawnVarChars += l + 1;
 
 	return dest;
+}
+
+qboolean GetEntityToken( char *buffer, int size ) {
+	const char  *s;
+
+	char *data;
+
+	data = level.extraEntsScript;
+
+	s = COM_Parse( &data );
+	Q_strncpyz( buffer, s, size );
+	if ( !s[0] ) {
+		return qfalse;
+	} else {
+		return qtrue;
+	}
+}
+
+
+qboolean G_LoadEntsFile( void ) {
+	char filename[MAX_QPATH];
+	vmCvar_t mapname;
+	fileHandle_t f;
+	int len;
+
+	level.extraEntsScript = NULL;
+
+	trap_Cvar_VariableStringBuffer( "g_scriptName", filename, sizeof( filename ) );
+	if ( strlen( filename ) > 0 ) {
+		trap_Cvar_Register( &mapname, "g_scriptName", "", CVAR_ROM );
+	} else {
+		trap_Cvar_Register( &mapname, "mapname", "", CVAR_SERVERINFO | CVAR_ROM );
+	}
+	
+	if ( g_gameskill.integer == GSKILL_EASY ) {
+	Q_strncpyz( filename, "maps/easy/", sizeof( filename ) );
+    }
+    else if ( g_gameskill.integer == GSKILL_MEDIUM ) {
+	Q_strncpyz( filename, "maps/medium/", sizeof( filename ) );
+	}
+	else if ( g_gameskill.integer == GSKILL_HARD ) {
+	Q_strncpyz( filename, "maps/hard/", sizeof( filename ) );
+	}
+	else if ( g_gameskill.integer == GSKILL_MAX ) {
+	Q_strncpyz( filename, "maps/max/", sizeof( filename ) );
+	}
+	
+	Q_strcat( filename, sizeof( filename ), mapname.string );
+	Q_strcat( filename, sizeof( filename ), ".ents" );
+
+	len = trap_FS_FOpenFile( filename, &f, FS_READ );
+
+		if ( len < 0 ) {
+
+		// Check for original ents file
+		trap_Cvar_VariableStringBuffer( "g_scriptName", filename, sizeof( filename ) );
+
+		Q_strncpyz( filename, "maps/", sizeof( filename ) );
+		Q_strcat( filename, sizeof( filename ), mapname.string );
+		Q_strcat( filename, sizeof( filename ), ".ents" );
+
+		len = trap_FS_FOpenFile( filename, &f, FS_READ );
+		// make sure we clear out the temporary scriptname
+		trap_Cvar_Set( "g_scriptName", "" );
+		if ( len < 0 ) {
+			return qfalse;
+		}
+	}
+
+	level.extraEntsScript = G_Alloc( len );
+	trap_FS_Read( level.extraEntsScript, len, f );
+
+	trap_FS_FCloseFile( f );
+
+	return qtrue;
+}
+
+
+qboolean G_ParseExtraSpawnVars( void ) {
+	char _keyname[MAX_TOKEN_CHARS];
+	char *keyname;
+	char _com_token[MAX_TOKEN_CHARS];
+	char *com_token;
+	char *data;
+
+
+	level.numSpawnVars = 0;
+	level.numSpawnVarChars = 0;
+
+	data = level.extraEntsScript;
+
+	// parse the opening brace
+	com_token = COM_Parse( &data );
+	if ( !com_token[0] ) {
+		// end of spawn string
+		return qfalse;
+	}
+	if ( com_token[0] == '}' ) {
+		return qfalse;
+	}
+	if ( com_token[0] != '{' ) {
+		G_Error( "G_ParseExtraSpawnVars: found %s when expecting {",com_token );
+	}
+
+	// go through all the key / value pairs
+	while ( 1 ) {
+		// parse key
+		keyname = COM_Parse( &data );
+		if ( !keyname[0] ) {
+			return qfalse;
+		}
+
+		if ( keyname[0] == '}' ) {
+			G_SpawnExtraGEntityFromSpawnVars();
+			continue;
+		}
+
+		if ( keyname[0] == '{' ) {
+			level.numSpawnVars = 0;
+			level.numSpawnVarChars = 0;
+			continue;
+		}
+
+		strcpy( _keyname, keyname );
+
+		// parse value
+		com_token = COM_Parse( &data );
+		if ( !com_token[0] ) {
+			G_Error( "G_ParseExtraSpawnVars: EOF without closing brace" );
+		}
+
+		if ( com_token[0] == '}' ) {
+			G_Error( "G_ParseExtraSpawnVars: closing brace without data" );
+		}
+
+		strcpy( _com_token, com_token );
+		if ( level.numSpawnVars == MAX_SPAWN_VARS ) {
+			G_Error( "G_ParseExtraSpawnVars: MAX_SPAWN_VARS" );
+		}
+		level.spawnVars[ level.numSpawnVars ][0] = G_AddSpawnVarToken( _keyname );
+		level.spawnVars[ level.numSpawnVars ][1] = G_AddSpawnVarToken( _com_token );
+		level.numSpawnVars++;
+
+	}
+	return qtrue;
 }
 
 /*
@@ -1048,6 +1213,9 @@ void G_SpawnEntitiesFromString( void ) {
 	while ( G_ParseSpawnVars() ) {
 		G_SpawnGEntityFromSpawnVars();
 	}
+
+	G_LoadEntsFile();
+	G_ParseExtraSpawnVars();
 
 	level.spawning = qfalse;            // any future calls to G_Spawn*() will be errors
 }
