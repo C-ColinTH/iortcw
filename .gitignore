@@ -37,3 +37,10 @@ profile
 # Microsoft Visual Studio
 ####################
 *.sdf
+*.opensdf
+*.suo
+
+# vscode
+####################
+.vscode/
+/.vs
