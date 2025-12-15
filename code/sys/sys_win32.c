@@ -943,7 +943,7 @@ void Sys_OpenURL( char *url, qboolean doexit ) {                // NERVE - SMF
 	wnd = GetForegroundWindow();
 
 	if ( wnd ) {
-		ShowWindow( wnd, SW_MAXIMIZE );
+		ShowWindow( wnd, SW_RESTORE );
 	}
 
 	if ( doexit ) {
