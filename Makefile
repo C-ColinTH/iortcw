@@ -1223,6 +1223,11 @@ ifeq ($(USE_MUMBLE),1)
   CLIENT_CFLAGS += -DUSE_MUMBLE
 endif
 
+ifdef UTF8
+  CFLAGS += -DUTF8
+  CLIENT_CFLAGS += -DUTF8
+endif
+
 ifeq ($(USE_INTERNAL_ZLIB),1)
   ZLIB_CFLAGS = -DNO_GZIP -I$(ZDIR)
 else
