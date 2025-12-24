@@ -193,6 +193,16 @@ int R_ComputeLOD( trRefEntity_t *ent ) {
 	mdrHeader_t *mdr;
 	mdrFrame_t *mdrframe;
 	int lod;
+	static int lodBiasUesd = 0;
+
+	if ( lodBiasUesd != r_lodbias->integer ) {
+		lodBiasUesd = r_lodbias->integer;
+		R_ClearModelLodCache();
+	}
+
+	if ( tr.currentModel->validLod >= 0 && tr.currentModel->validLod < MD3_MAX_LODS ) {
+		return tr.currentModel->validLod;
+	}
 
 	if ( tr.currentModel->numLods < 2 ) {
 		// model has only 1 LOD level, skip computations and bias
@@ -310,6 +320,8 @@ int R_ComputeLOD( trRefEntity_t *ent ) {
 		ri.Printf( PRINT_DEVELOPER, "\"R_ComputeLOD:\" \"%s\" index %d for LOD doesn't exist, change to %d\n",
 			tr.currentModel->name, lod_pre, lod);
 	}
+
+	tr.currentModel->validLod = lod;
 
 	return lod;
 }
